@@ -30,8 +30,8 @@ int main( int argc, char** argv ) {
 //        dc1394_capture_enqueue(camera[1],tmpframe[0]);
 //    } while (dc1394_capture_dequeue(camera[1],DC1394_CAPTURE_POLICY_POLL, tmpframe) != NULL);
     cvNamedWindow("side-by-side", CV_WINDOW_AUTOSIZE);
-    cvNamedWindow( "Wide FOV", CV_WINDOW_AUTOSIZE );
-    cvNamedWindow( "Zoom", CV_WINDOW_AUTOSIZE );
+    //cvNamedWindow( "Wide FOV", CV_WINDOW_AUTOSIZE );
+    //cvNamedWindow( "Zoom", CV_WINDOW_AUTOSIZE );
 
     CvCapture* capture1;
     CvCapture* capture2;
@@ -42,25 +42,36 @@ int main( int argc, char** argv ) {
         capture1 = cvCaptureFromFile( argv[1] );
         capture2 = cvCaptureFromFile( argv[1] );
     }
-    IplImage* frame1;
-    IplImage* frame2;
-    IplImage frame3;
+    IplImage* frame1 = cvQueryFrame( capture1 );
+    IplImage* frame2 = cvQueryFrame( capture2 );
+    IplImage* frame3 = cvCreateImage(cvSize(frame1->width + frame2->width, frame1->height), frame1->depth, frame1->nChannels);
+    IplImage* mask1 = cvCreateImage(cvSize(1280,480), IPL_DEPTH_8U, 1);
+    IplImage* mask2 = cvCreateImage(cvSize(1280,480), IPL_DEPTH_8U, 1);
+    //cvSetImageROI(mask1, cvRect(0,0,640,480));
+    //cvSet(mask1, cvScalar(0xff));
+    //cvResetImageROI(mask1);
+    //cvNot(mask1, mask2);
+    cvSetImageROI(mask1, cvRect(0,0,640,480));
+    cvSetImageROI(mask2, cvRect(640,0,640,480));
     while(1) {
         frame1 = cvQueryFrame( capture1 );
         frame2 = cvQueryFrame( capture2 );
         if( !frame1 || !frame2 ) break;
-        cvShowImage( "Wide FOV", frame1 );
-        cvShowImage( "Zoom", frame2 );
-//        frame3 = *frame1;
-//        frame3.width = frame1->width*2;
-//        cvShowImage("side-by-side",&frame3);
+        //cvShowImage( "Wide FOV", frame1 );
+        //cvShowImage( "Zoom", frame2 );
+        cvSetImageROI(frame3, cvRect(0,0,640,480));
+        cvCopy(frame1, frame3);
+        cvSetImageROI(frame3, cvRect(640,0,640,480));
+        cvCopy(frame2, frame3);
+        cvResetImageROI(frame3);
+        cvShowImage("side-by-side", frame3);
         char c = cvWaitKey(33);
         if( c == 27 ) break;
     }
     cvReleaseCapture( &capture1 );
     cvReleaseCapture( &capture2 );
-    cvDestroyWindow( "Wide FOV" );
-    cvDestroyWindow( "Zoom" );
+    //cvDestroyWindow( "Wide FOV" );
+    //cvDestroyWindow( "Zoom" );
 
     dc1394_camera_set_power(camera[0], DC1394_OFF);
     dc1394_camera_set_power(camera[1], DC1394_OFF);
