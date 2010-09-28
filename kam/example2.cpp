@@ -13,13 +13,13 @@ int main( int argc, char** argv ) {
     printf("%d cameras\n", sizeof camlist / sizeof camlist[0]);
 
     dc1394camera_t* camera0 = dc1394_camera_new(dcenv,camlist[0]->ids->guid);
-    dc1394camera_t* camera1 = dc1394_camera_new(dcenv,camlist[1]->ids->guid);
+//    dc1394camera_t* camera1 = dc1394_camera_new(dcenv,camlist[1]->ids->guid);
 
     dc1394_camera_free_list(camlist[0]);
     dc1394_camera_free_list(camlist[1]);
     
     dc1394_capture_stop(camera0);
-    dc1394_capture_stop(camera1);
+//    dc1394_capture_stop(camera1);
     
     dc1394_reset_bus(camera0);
 
