@@ -1,5 +1,7 @@
 #include "opencv/highgui.h"
 #include "dc1394/dc1394.h"
+#include <stdlib.h>
+#include <stdio.h>
 
 int main( int argc, char** argv ) {
     // firewire stuff
@@ -53,6 +55,11 @@ int main( int argc, char** argv ) {
     //cvNot(mask1, mask2);
     cvSetImageROI(mask1, cvRect(0,0,640,480));
     cvSetImageROI(mask2, cvRect(640,0,640,480));
+    int p[3];
+    p[0] = CV_IMWRITE_JPEG_QUALITY;
+    p[1] = 80;
+    p[2] = 0;
+
     while(1) {
         frame1 = cvQueryFrame( capture1 );
         frame2 = cvQueryFrame( capture2 );
@@ -66,7 +73,19 @@ int main( int argc, char** argv ) {
         cvResetImageROI(frame3);
         cvShowImage("side-by-side", frame3);
         char c = cvWaitKey(33);
-        if( c == 27 ) break;
+        if (c == 27) {
+            break;
+        }
+
+        switch(c) {
+            case 83:
+            case 115:
+                char file[80] = itoa(time(NULL));
+                
+                strcat(file, "Wtest")
+                cvSaveImage("test1.jpg", frame1, p);
+                cvSaveImage("test2.jpg", frame2, p);
+        }
     }
     cvReleaseCapture( &capture1 );
     cvReleaseCapture( &capture2 );
