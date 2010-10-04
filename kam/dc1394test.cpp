@@ -33,6 +33,17 @@ int main( int argc, char** argv ) {
 //    do {
 //        dc1394_capture_enqueue(camera[1],tmpframe[0]);
 //    } while (dc1394_capture_dequeue(camera[1],DC1394_CAPTURE_POLICY_POLL, tmpframe) != NULL);
+/*
+    dc1394video_modes_t* modes;
+    if (dc1394_video_get_supported_modes((camlist[0])->camera_info,modes) < 0) {
+        printf("Could not query supported formats\n");
+        exit(1);
+    }
+    printf("video modes: ");
+    for ( int i = 0; i < modes->num; i++ ) {
+        printf(" %d,", modes->modes[i]);
+    }
+*/
     cvNamedWindow("side-by-side", CV_WINDOW_AUTOSIZE);
     //cvNamedWindow( "Wide FOV", CV_WINDOW_AUTOSIZE );
     //cvNamedWindow( "Zoom", CV_WINDOW_AUTOSIZE );

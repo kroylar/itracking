@@ -1,3 +1,9 @@
 08092010
-* Add a way to save the images when a button is pressed.
+* Add a way to save the images when a button is pressed. (completed 28092010)
 * Eye tracking on Wide FOV following opencv example.
+
+29092010
+* use dc1394 to control the camera. ie: change to grayscale.
+
+04102010
+* capture_stop SEGFAULTS unless coriander has been previously run.  Fix this.
