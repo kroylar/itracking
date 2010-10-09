@@ -7,3 +7,8 @@
 
 04102010
 * capture_stop SEGFAULTS unless coriander has been previously run.  Fix this.
+
+08102010
+* use http://www.cognotics.com/opencv/servo_2007_series/part_2/page_2.html as
+  guide to tune haar classifier.  Also, return all matches and keep a averaging
+  sum.  This will get rid of jitter and stabilize the actual face detection.
