@@ -1,3 +1,8 @@
+/*********************************************************
+ * Simple opencv facetracker with dual camera support
+ *
+ * -KRL
+ *  *****************************************************/
 #include "opencv/cv.h"
 #include "opencv/highgui.h"
 #include "dc1394/control.h"
