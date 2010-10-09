@@ -1,5 +1,6 @@
 #include "opencv/cv.h"
 #include "opencv/highgui.h"
+#include "dc1394/control.h"
 #include "dc1394/dc1394.h"
 #include <iostream>
 #include <string>
