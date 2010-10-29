@@ -157,7 +157,7 @@ void detect_and_draw( IplImage* image,
     IplImage* small_image = image;
     CvMemStorage* storage = cvCreateMemStorage(0);
     CvSeq* faces;
-    int i, scale = 1;
+    int i, scale = 1.8;
 
     /* if the flag is specified, down-scale the input image to get a
        performance boost w/o loosing quality (perhaps) */
@@ -191,7 +191,7 @@ void detect_and_draw( IplImage* image,
 /*
 void detect_and_draw( IplImage* img )
 {
-    int scale = 1.5;
+    int scale = 1.8;
 
     // Create a new image based on the input image
     IplImage* temp = cvCreateImage( cvSize(img->width/scale,img->height/scale), 8, 3 );
