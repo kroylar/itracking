@@ -83,19 +83,26 @@ int main( int argc, char** argv ) {
     cvNamedWindow("side-by-side", CV_WINDOW_AUTOSIZE);
     //cvNamedWindow( "Wide FOV", CV_WINDOW_AUTOSIZE );
     //cvNamedWindow( "Zoom", CV_WINDOW_AUTOSIZE );
+    cvNamedWindow( "small zoom", CV_WINDOW_AUTOSIZE );
+    cvNamedWindow("CCOEFF_NORMED", 0);
 
     CvCapture* capture1;
     CvCapture* capture2;
     if (argc == 1) {
-        capture1 = cvCaptureFromCAM(0);
-        capture2 = cvCaptureFromCAM(1);
+        capture1 = cvCaptureFromCAM(1);
+        capture2 = cvCaptureFromCAM(0);
     } else {
         capture1 = cvCaptureFromFile( argv[1] );
-        capture2 = cvCaptureFromFile( argv[1] );
+        capture2 = cvCaptureFromFile( argv[2] );
     }
     IplImage* frame1 = cvQueryFrame( capture1 );
+    IplImage* frame1g = cvCreateImage(cvGetSize(frame1), IPL_DEPTH_8U, 1);
+    IplImage* zsmallg = cvCreateImage(cvSize((frame1->width)/5.2, (frame1->height)/5.2), IPL_DEPTH_8U, 1);
+    IplImage* zsmall = cvCreateImage(cvGetSize(frame1), IPL_DEPTH_8U, 3);
     IplImage* frame2 = cvQueryFrame( capture2 );
-    IplImage* frame3 = cvCreateImage(cvSize(frame1->width + frame2->width, frame1->height), frame1->depth, frame1->nChannels);
+    IplImage* frame2g = cvCreateImage(cvGetSize(frame2), IPL_DEPTH_8U, 1);
+//    IplImage* frame3 = cvCreateImage(cvSize(frame1->width + frame2->width, frame1->height), frame1->depth, frame1->nChannels);
+    IplImage* frame3 = cvCreateImage(cvSize(frame1->width+frame2->width, frame1->height), IPL_DEPTH_8U, 1);
     IplImage* mask1 = cvCreateImage(cvSize(1280,480), IPL_DEPTH_8U, 1);
     IplImage* mask2 = cvCreateImage(cvSize(1280,480), IPL_DEPTH_8U, 1);
     //cvSetImageROI(mask1, cvRect(0,0,640,480));
@@ -110,20 +117,62 @@ int main( int argc, char** argv ) {
     p[2] = 0;
     string file1 ("saves/Wide");
     string file2 ("saves/Zoom");
+    IplImage *ftmp[6];
+    int i = 30;
+    int iwidth = frame1g->width - zsmallg->width + 1;
+    int iheight = frame1g->height - zsmallg->height + 1;
 
     while(1) {
         frame1 = cvQueryFrame( capture1 );
-        detect_and_draw(frame1, 1);
+        cvCvtColor(frame1, frame1g, CV_BGR2GRAY);
+        //detect_and_draw(frame1g, 1);
         frame2 = cvQueryFrame( capture2 );
-        if( !frame1 || !frame2 ) break;
+        cvCvtColor(frame2, frame2g, CV_BGR2GRAY);
+        if( !frame1g || !frame2g ) break;
         //cvShowImage( "Wide FOV", frame1 );
         //cvShowImage( "Zoom", frame2 );
         cvSetImageROI(frame3, cvRect(0,0,640,480));
-        cvCopy(frame1, frame3);
+        cvCopy(frame1g, frame3);
         cvSetImageROI(frame3, cvRect(640,0,640,480));
-        cvCopy(frame2, frame3);
+        cvCopy(frame2g, frame3);
         cvResetImageROI(frame3);
         cvShowImage("side-by-side", frame3);
+
+        cvResize(frame2g, zsmallg);
+        cvShowImage("small zoom", zsmallg);
+        //cvHistogram *zhist;
+        //cvCalcHist(&frame2g, zhist);
+
+
+        //for (i = 0; i < 6; i++) {
+        if (i  == 30) {
+            ftmp[5] = cvCreateImage(cvSize(iwidth,iheight),IPL_DEPTH_32F,1);
+            cvMatchTemplate( frame1g, zsmallg, ftmp[5], 5 );
+            cvNormalize(ftmp[5],ftmp[5],1,0,CV_MINMAX);
+            cvPow(ftmp[5],ftmp[5],10);
+            i = 0;
+        }
+        i++;
+        //}
+        //for (i=0; i<6; i++) {
+        //    cvMatchTemplate( frame1g, zsmallg, ftmp[5], 5 );
+        //    cvNormalize(ftmp[5],ftmp[5],1,0,CV_MINMAX);
+        //    cvPow(ftmp[5],ftmp[5],10);
+        //}
+
+       // cvNamedWindow("SQDIFF", 0);
+        //cvShowImage("SQDIFF", ftmp[0]);
+        //cvNamedWindow("SQDIFF_NORMED", 0);
+        //cvShowImage("SQDIFF_NORMED", ftmp[1]);
+        //cvNamedWindow("CCORR", 0);
+        //cvShowImage("CCORR", ftmp[2]);
+        //cvNamedWindow("CCORR_NORMED", 0);
+        //cvShowImage("CCORR_NORMED", ftmp[3]);
+        //cvNamedWindow("CCOEFF", 0);
+        //cvShowImage("CCOEFF", ftmp[4]);
+
+        cvShowImage("CCOEFF_NORMED", ftmp[5]);
+
         char c = cvWaitKey(3);
         if (c == 27) {
             break;
@@ -134,8 +183,8 @@ int main( int argc, char** argv ) {
             case 115:
                 stringstream ss;
                 ss << time(NULL);
-                cvSaveImage((file1 + ss.str() + ".jpg").c_str(), frame1, p);
-                cvSaveImage((file2 + ss.str() + ".jpg").c_str(), frame2, p);
+                cvSaveImage((file1 + ss.str() + ".jpg").c_str(), frame1g, p);
+                cvSaveImage((file2 + ss.str() + ".jpg").c_str(), frame2g, p);
         }
     }
     cvReleaseCapture( &capture1 );
@@ -163,7 +212,7 @@ void detect_and_draw( IplImage* image,
        performance boost w/o loosing quality (perhaps) */
     if( do_pyramids )
     {
-        small_image = cvCreateImage( cvSize(image->width/2,image->height/2), IPL_DEPTH_8U, 3 );
+        small_image = cvCreateImage( cvSize(image->width/2,image->height/2), IPL_DEPTH_8U, 1 );
         cvPyrDown( image, small_image, CV_GAUSSIAN_5x5 );
         scale = 2;
     }
