@@ -121,6 +121,7 @@ int main( int argc, char** argv ) {
     int i = 30;
     int iwidth = frame1g->width - zsmallg->width + 1;
     int iheight = frame1g->height - zsmallg->height + 1;
+    ftmp[5] = cvCreateImage(cvSize(iwidth,iheight),IPL_DEPTH_32F,1);
 
     while(1) {
         frame1 = cvQueryFrame( capture1 );
@@ -145,8 +146,7 @@ int main( int argc, char** argv ) {
 
 
         //for (i = 0; i < 6; i++) {
-        if (i  == 30) {
-            ftmp[5] = cvCreateImage(cvSize(iwidth,iheight),IPL_DEPTH_32F,1);
+        if (i >= 10) {
             cvMatchTemplate( frame1g, zsmallg, ftmp[5], 5 );
             cvNormalize(ftmp[5],ftmp[5],1,0,CV_MINMAX);
             cvPow(ftmp[5],ftmp[5],10);
@@ -172,6 +172,7 @@ int main( int argc, char** argv ) {
         //cvShowImage("CCOEFF", ftmp[4]);
 
         cvShowImage("CCOEFF_NORMED", ftmp[5]);
+
 
         char c = cvWaitKey(3);
         if (c == 27) {

@@ -31,10 +31,12 @@ main()
   int c, res;
   struct termios newtio;
   char buf[255];
-  int OCR1A = 1560, OCR1B = 1520;
+  int OCR1A = 1300, OCR1B = 1300;
+  int pwmymin, pwmxmin, pwmymax, pwmxmax;
   
-  initscr();
+  WINDOW *w = initscr();
   cbreak();
+  nodelay(w, TRUE);
 /* 
   Open modem device for reading and writing and not as controlling tty
   because we don't want to get killed if linenoise sends CTRL-C.
@@ -115,42 +117,49 @@ main()
 
  while (STOP==FALSE) {     /* loop until we have a terminating condition */
     sleep(1);
-     for (OCR1B = 1520; OCR1B >= 1280; OCR1B = OCR1B -= 10) {
-         sprintf(tmp,"%d\n",OCR1A);
-         write(fd,tmp,5);
-         usleep(DELAY);
-         sprintf(tmp,"%d\n",OCR1B);
-         write(fd,tmp,5);
-         usleep(DELAY);
-         getch();
-     }
-     sleep(1);
-     for (OCR1A = 1560; OCR1A >= 1280; OCR1A -= 10) {
-         sprintf(tmp,"%d\n",OCR1A);
-         write(fd,tmp,5);
-         usleep(DELAY);
-         sprintf(tmp,"%d\n",OCR1B);
-         write(fd,tmp,5);
-         usleep(DELAY);
-     }
-     sleep(1);
-     for (OCR1B = 1280; OCR1B <= 1520; OCR1B += 10) {
-         sprintf(tmp,"%d\n",OCR1A);
-         write(fd,tmp,5);
-         usleep(DELAY);
-         sprintf(tmp,"%d\n",OCR1B);
-         write(fd,tmp,5);
-         usleep(DELAY);
-     }
-     sleep(1);
-     for (OCR1A = 1280; OCR1A <= 1560; OCR1A += 10) {
-         sprintf(tmp,"%d\n",OCR1A);
-         write(fd,tmp,5);
-         usleep(DELAY);
-         sprintf(tmp,"%d\n",OCR1B);
-         write(fd,tmp,5);
-         usleep(DELAY);
-     }
+    while (getch() == ERR) {
+        OCR1B += 1;
+        sprintf(tmp,"%d\n",OCR1A);
+        write(fd,tmp,5);
+        usleep(DELAY);
+        sprintf(tmp,"%d\n",OCR1B);
+        write(fd,tmp,5);
+        usleep(DELAY);
+    }
+    pwmymax = OCR1B;
+
+    while (getch() == ERR) {
+        OCR1A -= 1;
+        sprintf(tmp,"%d\n",OCR1A);
+        write(fd,tmp,5);
+        usleep(DELAY);
+        sprintf(tmp,"%d\n",OCR1B);
+        write(fd,tmp,5);
+        usleep(DELAY);
+    }
+    pwmxmin = OCR1A;
+
+    while (getch() == ERR) {
+        OCR1B -= 1;
+        sprintf(tmp,"%d\n",OCR1A);
+        write(fd,tmp,5);
+        usleep(DELAY);
+        sprintf(tmp,"%d\n",OCR1B);
+        write(fd,tmp,5);
+        usleep(DELAY);
+    }
+    pwmymin = OCR1B;
+
+    while (getch() == ERR) {
+        OCR1A += 1;
+        sprintf(tmp,"%d\n",OCR1A);
+        write(fd,tmp,5);
+        usleep(DELAY);
+        sprintf(tmp,"%d\n",OCR1B);
+        write(fd,tmp,5);
+        usleep(DELAY);
+    }
+    pwmxmax = OCR1A;
  }
  /* restore the old port settings */
  tcsetattr(fd,TCSANOW,&oldtio);
@@ -159,5 +168,6 @@ main()
 
 void ex_program(int sig) {
     tcsetattr(fd,TCSANOW,&oldtio);
+    endwin();
     exit(0);
 }
