@@ -15,8 +15,8 @@ int main()
     CvCapture* capture = cvCaptureFromCAM( CV_CAP_ANY);
 
     IplImage *img;
-    char *file1 = "../../data/haarcascades/haarcascade_frontalface_alt.xml";
-    char *file2 = "../../data/haarcascades/haarcascade_eye.xml";
+    char *file1 = "haarcascade_frontalface_alt.xml";
+    char *file2 = "haarcascade_eye.xml";
 
     /* load the face classifier */
     cascade_f = (CvHaarClassifierCascade*)cvLoad(file1, 0, 0, 0);
