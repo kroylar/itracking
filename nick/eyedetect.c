@@ -66,7 +66,11 @@ void detectEyes(IplImage *img)
     if (faces->total == 0) return;
 #if 1
     if (prev_face==NULL) { 
-        cvCopy(faces, prev_face, NULL);
+        //cvCopy(faces, prev_face, NULL);
+        // prev_face = (CvSeq *)malloc(sizeof(CvSeq));
+        prev_face = cvCloneSeq(faces,storage1);
+
+
     } else {
         for (i = 0; i < faces->total; i++) {
             CvRect *cur = (CvRect*)cvGetSeqElem(faces, i);
@@ -82,7 +86,9 @@ void detectEyes(IplImage *img)
                 else
                     diffy = prev->y - cur->y;
                 if(diffx < MINDIF && diffy < MINDIF){
-                    cvCopy(faces, prev_face,NULL);
+                    //cvCopy(faces, prev_face,NULL);
+                    //prev_face = (CvSeq *)malloc(sizeof(CvSeq));
+                    prev_face = cvCloneSeq(faces,storage1);
                     face_count++;
                 }
             }
