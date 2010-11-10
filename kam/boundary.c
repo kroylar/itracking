@@ -115,7 +115,6 @@ main()
 */
 #define DELAY 50000
 
- while (STOP==FALSE) {     /* loop until we have a terminating condition */
     sleep(1);
     while (getch() == ERR) {
         OCR1B += 1;
@@ -160,7 +159,7 @@ main()
         usleep(DELAY);
     }
     pwmxmax = OCR1A;
- }
+ 
  /* restore the old port settings */
  tcsetattr(fd,TCSANOW,&oldtio);
 }

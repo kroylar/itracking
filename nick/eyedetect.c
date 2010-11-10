@@ -3,17 +3,19 @@
 #include "highgui.h"
 
 #define MINDIF 10
+#define NUMFRAMES 5
 
 CvHaarClassifierCascade *cascade_f;
 CvHaarClassifierCascade *cascade_e;
 CvMemStorage			*storage;
-CvMemStorage			*storage1;
+CvMemStorage			*storage1[NUMFRAMES];
 
 void detectEyes(IplImage *img);
 
 int main()
 {
-    CvCapture* capture = cvCaptureFromCAM( CV_CAP_ANY);
+    int i;
+    CvCapture* capture = cvCaptureFromCAM(1);
 
     IplImage *img;
     char *file1 = "haarcascade_frontalface_alt.xml";
@@ -27,7 +29,9 @@ int main()
 
     /* setup memory storage, needed by the object detector */
     storage = cvCreateMemStorage(0);
-    storage1 = cvCreateMemStorage(0);
+    for (i = 0; i < NUMFRAMES; i++) {
+        storage1[i] = cvCreateMemStorage(0);
+    }
 
     while(1){
         /* load image */
@@ -45,15 +49,20 @@ int main()
     cvDestroyWindow("EyeDetect");
     cvReleaseCapture(&capture);
 
+    for (i = 0; i < NUMFRAMES; i++)
+        cvClearMemStorage(storage1[i]);
+
     return 0;
 }
 
 void detectEyes(IplImage *img)
-{
-    int i, j;
+{ 
+    int i, j, k;
+    static int ringpos = 0;
     static int face_count = 0;
     static int face_uncount = 0;
-    static CvSeq *prev_face = NULL;
+    static CvSeq *prev_faces[NUMFRAMES];
+    int possface[10]; // max 10 detected faces per frame
     int totalf;
     int diffx, diffy;
     CvSeq *faces;
@@ -65,58 +74,59 @@ void detectEyes(IplImage *img)
 
     /* return if not found */
     if (faces->total == 0) { 
-        face_uncount++;
+   /*     face_uncount++;
         if (face_count > 3 && face_uncount > 3) {
             face_count = 0;
         } 
+        */
         return;
     }
 
+    for (k = ringpos; k > 0; k--) {
+        prev_faces[k] = cvCloneSeq(prev_faces[k-1], storage1[k]);
+    }
+    prev_faces[0] = cvCloneSeq(faces, storage1[0]);
 
-    if (prev_face==NULL) { 
-        //cvCopy(faces, prev_face, NULL);
-        // prev_face = (CvSeq *)malloc(sizeof(CvSeq));
-        prev_face = cvCloneSeq(faces,storage1);
-
-
-    } else {
-        for (i = 0; i < faces->total; i++) {
-            CvRect *cur = (CvRect*)cvGetSeqElem(faces, i);
-            for (j = 0; j < prev_face->total; j++) {
-                CvRect *prev = (CvRect*)cvGetSeqElem(prev_face, j);
-                if(cur->x > prev->x)
+    for (i = 0; i < faces->total; i++) {
+        CvRect *cur = (CvRect*)cvGetSeqElem(faces, i);
+        for (k = 0; k < ringpos; k++) { 
+            for (j = 0; j < prev_faces[k]->total; j++) {
+                CvRect *prev = (CvRect*)cvGetSeqElem(prev_faces[k], j);
+                if (cur->x > prev->x)
                     diffx = cur->x - prev->x;
                 else
                     diffx = prev->x - cur->x;
 
-                if(cur->y > prev->y)
+                if (cur->y > prev->y)
                     diffy = cur->y - prev->y;
                 else
                     diffy = prev->y - cur->y;
-                if(diffx < MINDIF && diffy < MINDIF){
-                    //cvCopy(faces, prev_face,NULL);
-                    //prev_face = (CvSeq *)malloc(sizeof(CvSeq));
-                    prev_face = cvCloneSeq(faces,storage1);
-                    face_count++;
+
+                if (diffx < MINDIF && diffy < MINDIF){
+                    possface[i]++;
                 }
             }
         }
     }
 
-    if (face_count < 3) return;
-    face_uncount = 0;
+    for (i = 0; i < faces->total; i++) {
+        if (possface[i] >= 4) {
+            /* draw a rectangle */
+            CvRect *r = (CvRect*)cvGetSeqElem(faces, i);
+            cvRectangle(img,
+                        cvPoint(r->x, r->y),
+                        cvPoint(r->x + r->width, r->y + r->height),
+                        CV_RGB(255, 0, 0), 3, 8, 0);
+        }
+    }
 
-    /* draw a rectangle */
-	CvRect *r = (CvRect*)cvGetSeqElem(faces, 0);
-	cvRectangle(img,
-				cvPoint(r->x, r->y),
-				cvPoint(r->x + r->width, r->y + r->height),
-				CV_RGB(255, 0, 0), 3, 8, 0);
+    if (ringpos < 4)
+        ringpos++;
 
     /* reset buffer for the next object detection */
     cvClearMemStorage(storage);
-    cvClearMemStorage(storage1);
 
+#if 0
     /* Set the Region of Interest: estimate the eyes' position */
     cvSetImageROI(img, cvRect(r->x, r->y + (r->height/5.5), r->width, r->height/3.0));
 
@@ -133,5 +143,6 @@ void detectEyes(IplImage *img)
 	}
 
     cvResetImageROI(img);
+#endif
 }
 
