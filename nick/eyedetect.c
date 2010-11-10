@@ -52,21 +52,27 @@ void detectEyes(IplImage *img)
 {
     int i, j;
     static int face_count = 0;
+    static int face_uncount = 0;
     static CvSeq *prev_face = NULL;
     int totalf;
     int diffx, diffy;
     CvSeq *faces;
 
     /* detect faces */
-    if(face_count < 3){
-	    faces = cvHaarDetectObjects(
-	    	img, cascade_f, storage,
-		    1.1, 3, 0, cvSize( 40, 40 ) );
-    }
+    faces = cvHaarDetectObjects(
+        img, cascade_f, storage,
+        1.1, 3, 0, cvSize( 40, 40 ) );
 
     /* return if not found */
-    if (faces->total == 0) return;
-#if 1
+    if (faces->total == 0) { 
+        face_uncount++;
+        if (face_count > 3 && face_uncount > 3) {
+            face_count = 0;
+        } 
+        return;
+    }
+
+
     if (prev_face==NULL) { 
         //cvCopy(faces, prev_face, NULL);
         // prev_face = (CvSeq *)malloc(sizeof(CvSeq));
@@ -97,7 +103,9 @@ void detectEyes(IplImage *img)
         }
     }
 
-#endif
+    if (face_count < 3) return;
+    face_uncount = 0;
+
     /* draw a rectangle */
 	CvRect *r = (CvRect*)cvGetSeqElem(faces, 0);
 	cvRectangle(img,
@@ -107,6 +115,7 @@ void detectEyes(IplImage *img)
 
     /* reset buffer for the next object detection */
     cvClearMemStorage(storage);
+    cvClearMemStorage(storage1);
 
     /* Set the Region of Interest: estimate the eyes' position */
     cvSetImageROI(img, cvRect(r->x, r->y + (r->height/5.5), r->width, r->height/3.0));
