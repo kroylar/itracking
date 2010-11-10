@@ -2,6 +2,8 @@
 #include "cv.h"
 #include "highgui.h"
 
+#define MINDIF 10
+
 CvHaarClassifierCascade *cascade_f;
 CvHaarClassifierCascade *cascade_e;
 CvMemStorage			*storage;
@@ -46,22 +48,54 @@ int main()
 
 void detectEyes(IplImage *img)
 {
-	int i;
+    int i, j;
+    static int face_count = 0;
+    static CvSeq *prev_face = NULL;
+    int totalf;
+    int diffx, diffy;
+    CvSeq *faces;
 
     /* detect faces */
-	CvSeq *faces = cvHaarDetectObjects(
-		img, cascade_f, storage,
-		1.1, 3, 0, cvSize( 40, 40 ) );
+    if(face_count < 3){
+	    faces = cvHaarDetectObjects(
+	    	img, cascade_f, storage,
+		    1.1, 3, 0, cvSize( 40, 40 ) );
+    }
 
     /* return if not found */
     if (faces->total == 0) return;
+#if 1
+    if (prev_face==NULL) { 
+        cvCopy(faces, prev_face, NULL);
+    } else {
+        for (i = 0; i < faces->total; i++) {
+            CvRect *cur = (CvRect*)cvGetSeqElem(faces, i);
+            for (j = 0; j < prev_face->total; j++) {
+                CvRect *prev = (CvRect*)cvGetSeqElem(prev_face, j);
+                if(cur->x > prev->x)
+                    diffx = cur->x - prev->x;
+                else
+                    diffx = prev->x - cur->x;
 
+                if(cur->y > prev->y)
+                    diffy = cur->y - prev->y;
+                else
+                    diffy = prev->y - cur->y;
+                if(diffx < MINDIF && diffy < MINDIF){
+                    cvCopy(faces, prev_face,NULL);
+                    face_count++;
+                }
+            }
+        }
+    }
+
+#endif
     /* draw a rectangle */
 	CvRect *r = (CvRect*)cvGetSeqElem(faces, 0);
 	cvRectangle(img,
 				cvPoint(r->x, r->y),
 				cvPoint(r->x + r->width, r->y + r->height),
-				CV_RGB(255, 0, 0), 1, 8, 0);
+				CV_RGB(255, 0, 0), 3, 8, 0);
 
     /* reset buffer for the next object detection */
     cvClearMemStorage(storage);
@@ -77,7 +111,7 @@ void detectEyes(IplImage *img)
     /* draw a rectangle for each eye found */
 	for( i = 0; i < (eyes ? eyes->total : 0); i++ ) {
 		CvRect *r1 = (CvRect*)cvGetSeqElem( eyes, i );
-		cvCircle(img, cvPoint((r1->x + 20), (r1->y + 20)), 10, CV_RGB(0, 0, 255), 1, 8, 0);
+		cvCircle(img, cvPoint((r1->x + 20), (r1->y + 20)), 10, CV_RGB(0, 0, 255), 3, 8, 0);
            printf("point %d x = %d, y = %d\n",i,r1->x + r->x + 20,r1->y+ r->x +20);
 	}
 
