@@ -7,6 +7,7 @@
 CvHaarClassifierCascade *cascade_f;
 CvHaarClassifierCascade *cascade_e;
 CvMemStorage			*storage;
+CvMemStorage			*storage1;
 
 void detectEyes(IplImage *img);
 
@@ -26,6 +27,7 @@ int main()
 
     /* setup memory storage, needed by the object detector */
     storage = cvCreateMemStorage(0);
+    storage1 = cvCreateMemStorage(0);
 
     while(1){
         /* load image */
