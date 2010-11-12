@@ -2,22 +2,43 @@
 #include "cv.h"
 #include "highgui.h"
 
-#define MINDIF 10
-#define NUMFRAMES 5
+#define MINDIF 20
+#define NUMFRAMES 7
 
+//global variables
 CvHaarClassifierCascade *cascade_f;
 CvHaarClassifierCascade *cascade_e;
 CvMemStorage			*storage;
 CvMemStorage			*storage1[NUMFRAMES];
 
-void detectEyes(IplImage *img);
+IplImage *img = 0, *image = 0, *hsv = 0, *hue = 0, *mask = 0, *backproject = 0, *histimg = 0;
+CvHistogram *hist = 0;
+
+int backproject_mode = 0;
+int select_object = 0;
+int track_object = -1;
+int show_hist = 1;
+CvPoint origin;
+CvRect selection;
+CvRect track_window;
+CvBox2D track_box;
+CvConnectedComp track_comp;
+int hdims = 16;
+float hranges_arr[] = {0,180};
+float* hranges = hranges_arr;
+int vmin = 10, vmax = 256, smin = 30;
+
+
+//function prototypes
+CvRect* detectFaces(IplImage *);
+void camshift_f(CvRect *, IplImage *);
+CvScalar hsv2rgb( float );
 
 int main()
 {
     int i;
-    CvCapture* capture = cvCaptureFromCAM(1);
-
-    IplImage *img;
+    CvCapture* capture = cvCaptureFromCAM(0);
+    CvRect* face = NULL;
     char *file1 = "haarcascade_frontalface_alt.xml";
     char *file2 = "haarcascade_eye.xml";
 
@@ -34,16 +55,37 @@ int main()
     }
 
     while(1){
+
         /* load image */
         img = cvQueryFrame(capture);
 
-
         cvNamedWindow("EyeDetect", CV_WINDOW_AUTOSIZE);
 
-        /* detect eyes and display image */
-        detectEyes(img);
-        cvShowImage("EyeDetect", img);
+        if( !image )
+        {   
+            /* allocate all the buffers */
+            image = cvCreateImage( cvGetSize(img), 8, 3 );
+            image->origin = img->origin;
+            hsv = cvCreateImage( cvGetSize(img), 8, 3 );
+            hue = cvCreateImage( cvGetSize(img), 8, 1 );
+            mask = cvCreateImage( cvGetSize(img), 8, 1 );
+            backproject = cvCreateImage( cvGetSize(img), 8, 1 );
+            hist = cvCreateHist( 1, &hdims, CV_HIST_ARRAY, &hranges, 1 );
 
+            histimg = cvCreateImage( cvSize(320,200), 8, 3 );
+            cvZero( histimg );
+        }
+        cvCopy(img, image, 0);
+        cvCvtColor( image, hsv, CV_BGR2HSV );
+        /* detect eyes and display image */
+        if(face == NULL){
+            face = detectFaces(img);
+            cvShowImage("EyeDetect",img);
+        }
+        else {
+            camshift_f(face,img);
+            cvShowImage("EyeDetect", image);
+        }
         if((cvWaitKey(10) & 255) == 27) break;
     }
     cvDestroyWindow("EyeDetect");
@@ -55,7 +97,8 @@ int main()
     return 0;
 }
 
-void detectEyes(IplImage *img)
+
+CvRect * detectFaces(IplImage *img)
 { 
     int i, j, k;
     static int ringpos = 0;
@@ -66,6 +109,7 @@ void detectEyes(IplImage *img)
     int totalf;
     int diffx, diffy;
     CvSeq *faces;
+    CvRect *r;
 
     /* detect faces */
     faces = cvHaarDetectObjects(
@@ -79,7 +123,7 @@ void detectEyes(IplImage *img)
             face_count = 0;
         } 
         */
-        return;
+        return NULL;
     }
 
     for (k = ringpos; k > 0; k--) {
@@ -110,22 +154,87 @@ void detectEyes(IplImage *img)
     }
 
     for (i = 0; i < faces->total; i++) {
-        if (possface[i] >= 4) {
+        if (possface[i] >= 1) {
             /* draw a rectangle */
-            CvRect *r = (CvRect*)cvGetSeqElem(faces, i);
+            r = (CvRect*)cvGetSeqElem(faces, i);
             cvRectangle(img,
                         cvPoint(r->x, r->y),
-                        cvPoint(r->x + r->width, r->y + r->height),
+                        cvPoint(r->x + r->width, r->y + r->width),
                         CV_RGB(255, 0, 0), 3, 8, 0);
+            return r;
         }
     }
 
-    if (ringpos < 4)
+    if (ringpos < 4){
         ringpos++;
-
+    }
     /* reset buffer for the next object detection */
     cvClearMemStorage(storage);
+}
 
+void camshift_f(CvRect *face, IplImage * img)
+{
+        int _vmin = vmin, _vmax = vmax;
+        static int bin_w, i;
+
+        cvInRangeS( hsv, cvScalar(0,smin,MIN(_vmin,_vmax),0),
+        cvScalar(180,256,MAX(_vmin,_vmax),0), mask );
+        cvSplit( hsv, hue, 0, 0, 0 );
+
+        if( track_object < 0 )
+        {
+            float max_val = 0.f;
+            cvSetImageROI( hue, *face );
+            cvSetImageROI( mask, *face );
+            cvCalcHist( &hue, hist, 0, mask );
+            cvGetMinMaxHistValue( hist, 0, &max_val, 0, 0 );
+            cvConvertScale( hist->bins, hist->bins, max_val ? 255. / max_val : 0., 0 );
+            cvResetImageROI( hue );
+            cvResetImageROI( mask );
+            track_window = *face;
+            track_object = 1;
+
+            bin_w = histimg->width / hdims;
+            for( i = 0; i < hdims; i++ )
+            {
+                int val = cvRound( cvGetReal1D(hist->bins,i)*histimg->height/255 );
+                CvScalar color = hsv2rgb(i*180.f/hdims);
+                cvRectangle( histimg, cvPoint(i*bin_w,histimg->height),
+                             cvPoint((i+1)*bin_w,histimg->height - val),
+                             color, -1, 8, 0 );
+            }
+        }
+
+        cvCalcBackProject( &hue, backproject, hist );
+        cvAnd( backproject, mask, backproject, 0 );
+        cvCamShift( backproject, track_window,
+                    cvTermCriteria( CV_TERMCRIT_EPS | CV_TERMCRIT_ITER, 10, 1 ),
+                    &track_comp, &track_box );
+        track_window = track_comp.rect;
+
+        if( backproject_mode )
+            cvCvtColor( backproject, image, CV_GRAY2BGR );
+        if( !image->origin )
+            track_box.angle = -track_box.angle;
+        cvEllipseBox( image, track_box, CV_RGB(255,0,0), 3, CV_AA, 0 );
+
+}
+CvScalar hsv2rgb( float hue )
+{
+    int rgb[3], p, sector;
+    static const int sector_data[][3]=
+        {{0,2,1}, {1,2,0}, {1,0,2}, {2,0,1}, {2,1,0}, {0,1,2}};
+    hue *= 0.033333333333333333333333333333333f;
+    sector = cvFloor(hue);
+    p = cvRound(255*(hue - sector));
+    p ^= sector & 1 ? 255 : 0;
+
+    rgb[sector_data[sector][0]] = 255;
+    rgb[sector_data[sector][1]] = 0;
+    rgb[sector_data[sector][2]] = p;
+
+    return cvScalar(rgb[2], rgb[1], rgb[0],0);
+}
 #if 0
     /* Set the Region of Interest: estimate the eyes' position */
     cvSetImageROI(img, cvRect(r->x, r->y + (r->height/5.5), r->width, r->height/3.0));
@@ -144,5 +253,5 @@ void detectEyes(IplImage *img)
 
     cvResetImageROI(img);
 #endif
-}
+
 
