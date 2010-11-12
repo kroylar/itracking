@@ -79,8 +79,8 @@ int main()
         cvCvtColor( image, hsv, CV_BGR2HSV );
         /* detect eyes and display image */
         if(face == NULL){
-            face = detectFaces(img);
-            cvShowImage("EyeDetect",img);
+            face = detectFaces(image);
+            cvShowImage("EyeDetect",image);
         }
         else {
             camshift_f(face,img);
@@ -105,7 +105,7 @@ CvRect * detectFaces(IplImage *img)
     static int face_count = 0;
     static int face_uncount = 0;
     static CvSeq *prev_faces[NUMFRAMES];
-    int possface[10]; // max 10 detected faces per frame
+    int possface[10]={0,0,0,0,0,0,0,0,0,0}; // max 10 detected faces per frame
     int totalf;
     int diffx, diffy;
     CvSeq *faces;
@@ -170,6 +170,7 @@ CvRect * detectFaces(IplImage *img)
     }
     /* reset buffer for the next object detection */
     cvClearMemStorage(storage);
+    return NULL;
 }
 
 void camshift_f(CvRect *face, IplImage * img)
