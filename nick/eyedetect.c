@@ -31,7 +31,8 @@ int vmin = 10, vmax = 256, smin = 30;
 
 //function prototypes
 CvRect* detectFaces(IplImage *);
-void camshift_f(CvRect *, IplImage *);
+CvRect* camshift_f(CvRect *, IplImage *);
+void eyedetect(CvRect *r, IplImage *img );
 CvScalar hsv2rgb( float );
 
 int main()
@@ -83,7 +84,8 @@ int main()
             cvShowImage("EyeDetect",image);
         }
         else {
-            camshift_f(face,img);
+            face = camshift_f(face,image);
+            eyedetect(face, image);
             cvShowImage("EyeDetect", image);
         }
         if((cvWaitKey(10) & 255) == 27) break;
@@ -173,7 +175,7 @@ CvRect * detectFaces(IplImage *img)
     return NULL;
 }
 
-void camshift_f(CvRect *face, IplImage * img)
+CvRect* camshift_f(CvRect *face, IplImage * img)
 {
         int _vmin = vmin, _vmax = vmax;
         static int bin_w, i;
@@ -218,6 +220,7 @@ void camshift_f(CvRect *face, IplImage * img)
         if( !image->origin )
             track_box.angle = -track_box.angle;
         cvEllipseBox( image, track_box, CV_RGB(255,0,0), 3, CV_AA, 0 );
+        return &track_window;
 
 }
 CvScalar hsv2rgb( float hue )
@@ -236,7 +239,11 @@ CvScalar hsv2rgb( float hue )
 
     return cvScalar(rgb[2], rgb[1], rgb[0],0);
 }
-#if 0
+
+void eyedetect(CvRect *r, IplImage *img )
+{
+    int i;
+
     /* Set the Region of Interest: estimate the eyes' position */
     cvSetImageROI(img, cvRect(r->x, r->y + (r->height/5.5), r->width, r->height/3.0));
 
@@ -253,6 +260,6 @@ CvScalar hsv2rgb( float hue )
 	}
 
     cvResetImageROI(img);
-#endif
+}
 
 
