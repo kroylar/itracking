@@ -26,6 +26,7 @@ void ex_program(int sig);
 
 main()
 {
+  int i;
   (void) signal(SIGINT, ex_program);
   char tmp[10];
   int c, res;
@@ -126,6 +127,7 @@ main()
         usleep(DELAY);
     }
     pwmymax = OCR1B;
+    printf("pwmymax = %d", pwmymax);
 
     while (getch() == ERR) {
         OCR1A -= 1;
@@ -137,6 +139,7 @@ main()
         usleep(DELAY);
     }
     pwmxmin = OCR1A;
+    printf("pwmxmin = %d", pwmxmin);
 
     while (getch() == ERR) {
         OCR1B -= 1;
@@ -148,6 +151,7 @@ main()
         usleep(DELAY);
     }
     pwmymin = OCR1B;
+    printf("pwmymin = %d", pwmymin);
 
     while (getch() == ERR) {
         OCR1A += 1;
@@ -159,9 +163,9 @@ main()
         usleep(DELAY);
     }
     pwmxmax = OCR1A;
+    printf("pwmxmax = %d", pwmxmax);
  
- /* restore the old port settings */
- tcsetattr(fd,TCSANOW,&oldtio);
+    for (;;);
 }
 
 
