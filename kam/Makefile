@@ -3,7 +3,7 @@ CFLAGS += -g $(shell pkg-config --cflags)
 LIBS += $(shell pkg-config --cflags --libs opencv)
 SOURCES=dc1394test.cpp
 OBJECTS=$(SOURCES:.cpp=.o)
-EXECUTABLES=dc1394test boundary
+EXECUTABLES=dc1394test
 
 all: $(EXECUTABLES)
 
