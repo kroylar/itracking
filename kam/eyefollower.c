@@ -9,12 +9,13 @@
 #include "dc1394/dc1394.h"
 #include <termios.h>
 #include <fcntl.h>
+#include <pthread.h>
 
 // boundary constants found using seperate "boundary" program
-#define PWMYMAX 1602
-#define PWMYMIN 1339
-#define PWMXMAX 1570
-#define PWMXMIN 1192
+#define PWMYMAX 1550
+#define PWMYMIN 1400
+#define PWMXMAX 1546
+#define PWMXMIN 1182
 #define DELAY 50000
 
 // constants for detections
@@ -32,12 +33,17 @@ struct termios oldtio;
 int fd;
 int sent = 0;
 
+int exiting = 0;
+
 //eyedetect stuff
 CvPoint eye;
 CvHaarClassifierCascade *cascade_f;
 CvHaarClassifierCascade *cascade_e;
 CvMemStorage			*storage;
 CvMemStorage			*storage1[NUMFRAMES];
+static CvSeq *prev_faces[NUMFRAMES];
+int possface[10]={0,0,0,0,0,0,0,0,0,0}; // max 10 detected faces per frame
+int ringpos = 0;
 
 IplImage *image = 0, *hsv = 0, *hue = 0, *mask = 0, *backproject = 0, *histimg = 0;
 CvHistogram *hist = 0;
@@ -54,12 +60,15 @@ CvConnectedComp track_comp;
 int hdims = 16;
 float hranges_arr[] = {0,180};
 float* hranges = hranges_arr;
-int vmin = 150, vmax = 256, smin = 30;
+int vmin = 60, vmax = 190, smin = 30;
 
+char tmp[10];
+int pwmx;
+int pwmy;
 
 void init_uart(void);
 void restore_uart(void);
-void sendcamera(CvPoint pt);
+void *sendcamera(void *);
 
 CvRect* detectFaces(IplImage *);
 CvRect* camshift_f(CvRect *, IplImage *);
@@ -72,12 +81,17 @@ int main( int argc, char** argv ) {
     CvRect* face = NULL;
     char *file1 = "haarcascade_frontalface_alt.xml";
     char *file2 = "haarcascade_eye.xml";
+    pthread_t thread;
+    int terr = 0;
+    long t;
+
 #if DEBUG
     int p[3];
     p[0] = CV_IMWRITE_JPEG_QUALITY;
     p[1] = 95;
     p[2] = 0;
 #endif
+
 
     /* load the face classifier */
     cascade_f = (CvHaarClassifierCascade*)cvLoad(file1, 0, 0, 0);
@@ -93,6 +107,11 @@ int main( int argc, char** argv ) {
 
     // initialize the UART
     init_uart();
+
+    terr = pthread_create(&thread, NULL, sendcamera, (void *)t);
+    if (terr) {
+        printf("ERRORRRRRRRRR, error = %d", terr);
+    }
 
     // firewire stuff
     // clear DMA ring buffer stop ISO transmission
@@ -183,7 +202,7 @@ int main( int argc, char** argv ) {
             eyedetect(face, image);
         }
 
-        sendcamera(eye);
+        //sendcamera(eye);
 
         cvSetImageROI(frame3, cvRect(0,0,640,480));
         cvCopy(image, frame3, NULL);
@@ -193,8 +212,26 @@ int main( int argc, char** argv ) {
         cvShowImage("side-by-side", frame3);
 
         char c = cvWaitKey(33);
-        if (c == 27) {
-            break;
+        if( c == 27) break;
+        switch (c) {
+            case 32:
+                ringpos = 0;
+                track_object = -1;
+                image = 0; 
+                hsv = 0; 
+                hue = 0; 
+                mask = 0; 
+                backproject = 0; 
+                histimg = 0;
+                hist = 0;
+                
+                face = NULL;
+                for (i = 0; i < NUMFRAMES; i++) {
+                    cvClearMemStorage(storage1[i]);
+                    prev_faces[i] = NULL;
+                }
+                for (i = 0; i < 10; i++)
+                    possface[i]= NULL;
         }
 #if DEBUG
         switch(c) {
@@ -204,9 +241,11 @@ int main( int argc, char** argv ) {
                 ss << time(NULL);
                 cvSaveImage((file1 + ss.str() + ".jpg").c_str(), zoomg, p);
                 cvSaveImage((file2 + ss.str() + ".jpg").c_str(), wideg, p);
+                break;
         }
 #endif
     }
+    exiting = 1;
     cvReleaseCapture( &capture1 );
     cvReleaseCapture( &capture2 );
 
@@ -222,6 +261,7 @@ int main( int argc, char** argv ) {
     dc1394_camera_free(camera[1]);
     dc1394_free(dcenv);
 
+    pthread_exit(NULL);
     restore_uart();
 }
 
@@ -264,31 +304,36 @@ void restore_uart(void) {
     tcsetattr(fd,TCSANOW,&oldtio);
 }
 
-void sendcamera(CvPoint pt) {
-    char tmp[10];
-    int pwmx;
-    int pwmy;
+void *sendcamera(void *threadid) {
+
     
-    pwmx = PWMXMIN + (PWMXMAX-PWMXMIN)*((double)(640-pt.x)/(double)640);
-    pwmy = PWMYMIN + (PWMYMAX-PWMYMIN)*((double)(480-pt.y)/(double)480);
+    printf("ThreadID = %ld\n", (long)threadid);
+    for (;;) {
+        pwmx = PWMXMIN + (PWMXMAX-PWMXMIN)*((double)(640-eye.x)/(double)640);
+        pwmy = PWMYMIN + (PWMYMAX-PWMYMIN)*((double)(480-eye.y)/(double)480);
 
-    //printf("pwmx = %d\n", pwmx);
-    //printf("pwmy = %d\n", pwmy);
+        //printf("send da data!\n");
 
-    sprintf(tmp,"%d\n",pwmx);
-    write(fd,tmp,5);
-    usleep(DELAY);
-    sprintf(tmp,"%d\n",pwmy);
-    write(fd,tmp,5);
-    usleep(DELAY);
+        //printf("pwmx = %d\n", pwmx);
+        //printf("pwmy = %d\n", pwmy);
+
+        sprintf(tmp,"%d\n",pwmx);
+        write(fd,tmp,5);
+        usleep(DELAY);
+        sprintf(tmp,"%d\n",pwmy);
+        write(fd,tmp,5);
+        usleep(DELAY);
+        if (exiting) pthread_exit(NULL);
+        
+    }
+
 }
 
 CvRect * detectFaces(IplImage *img)
 { 
     int i, j, k;
-    static int ringpos = 0;
-    static CvSeq *prev_faces[NUMFRAMES];
-    int possface[10]={0,0,0,0,0,0,0,0,0,0}; // max 10 detected faces per frame
+
+
     int diffx, diffy;
     CvSeq *faces;
     CvRect *r;
@@ -466,7 +511,7 @@ CvPoint* eyedetect(CvRect *r, IplImage *img )
             if (posseye[i] >= NEEDEDEFRAMES) {
                 r1 = (CvRect*)cvGetSeqElem(eyes, i);
                 eye = cvPoint((r1->x + r->x), (r1->y + r->y));
-                cvCircle(img, eye, r1->width/3, CV_RGB(0, 0, 255), 3, 8, 0);
+      //          cvCircle(img, eye, r1->width/3, CV_RGB(0, 0, 255), 3, 8, 0);
                 printf("x = %d, y = %d\n", eye.x, eye.y);
                 //cvClearMemStorage(storage);
                 //return &eye;
