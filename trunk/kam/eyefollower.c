@@ -12,10 +12,10 @@
 #include <pthread.h>
 
 // boundary constants found using seperate "boundary" program
-#define PWMYMAX 1550
-#define PWMYMIN 1400
-#define PWMXMAX 1546
-#define PWMXMIN 1182
+#define PWMYMAX 1594
+#define PWMYMIN 1355
+#define PWMXMAX 1532
+#define PWMXMIN 1179
 #define DELAY 50000
 
 // constants for detections
@@ -41,10 +41,28 @@ CvHaarClassifierCascade *cascade_f;
 CvHaarClassifierCascade *cascade_e;
 CvMemStorage			*storage;
 CvMemStorage			*storage1[NUMFRAMES];
-static CvSeq *prev_faces[NUMFRAMES];
+CvSeq *prev_faces[NUMFRAMES];
+CvSeq *prev_eyes[NUMFRAMES];
 int possface[10]={0,0,0,0,0,0,0,0,0,0}; // max 10 detected faces per frame
-int ringpos = 0;
+int posseye[10]={0,0,0,0,0,0,0,0,0,0}; // max 10 detected faces per frame
+int ringposf = 0;
+int ringpose = 0;
 
+IplImage *image = 0, *grey = 0, *prev_grey = 0, *pyramid = 0, *prev_pyramid = 0, *swap_temp;
+
+int win_size = 10;
+const int MAX_COUNT = 500;
+CvPoint2D32f* points[2] = {0,0}, *swap_points;
+char* status = 0;
+int count = 1;
+int need_to_init = 0;
+int night_mode = 0;
+int flags = 0;
+int add_remove_pt = 0;
+CvPoint pt;
+CvPoint eye;
+
+#if CAM
 IplImage *image = 0, *hsv = 0, *hue = 0, *mask = 0, *backproject = 0, *histimg = 0;
 CvHistogram *hist = 0;
 
@@ -61,6 +79,7 @@ int hdims = 16;
 float hranges_arr[] = {0,180};
 float* hranges = hranges_arr;
 int vmin = 60, vmax = 190, smin = 30;
+#endif
 
 char tmp[10];
 int pwmx;
@@ -71,19 +90,26 @@ void restore_uart(void);
 void *sendcamera(void *);
 
 CvRect* detectFaces(IplImage *);
+int eyedetect(CvRect *r, IplImage *img);
+
+#if CAM
 CvRect* camshift_f(CvRect *, IplImage *);
-CvPoint* eyedetect(CvRect *r, IplImage *img);
 CvScalar hsv2rgb( float );
+#endif
 
 int main( int argc, char** argv ) {
     IplImage *frame3;
-    int i;
+    int i, k;
     CvRect* face = NULL;
     char *file1 = "haarcascade_frontalface_alt.xml";
     char *file2 = "haarcascade_eye.xml";
     pthread_t thread;
     int terr = 0;
     long t;
+    int foundface = 0;
+    int foundeyes = 0;
+    int doinglk = 0;
+    int startlk = 0;
 
 #if DEBUG
     int p[3];
@@ -154,6 +180,7 @@ int main( int argc, char** argv ) {
     }
 #endif
     cvNamedWindow("side-by-side", CV_WINDOW_AUTOSIZE);
+//    cvNamedWindow("grey", CV_WINDOW_AUTOSIZE);
 
     CvCapture* capture1;
     CvCapture* capture2;
@@ -181,6 +208,15 @@ int main( int argc, char** argv ) {
             /* allocate all the buffers */
             image = cvCreateImage( cvGetSize(wide), 8, 3 );
             image->origin = wide->origin;
+            grey = cvCreateImage( cvGetSize(wide), 8, 1 );
+            prev_grey = cvCreateImage( cvGetSize(wide), 8, 1 );
+            pyramid = cvCreateImage( cvGetSize(wide), 8, 1 );
+            prev_pyramid = cvCreateImage( cvGetSize(wide), 8, 1 );
+            points[0] = (CvPoint2D32f*)cvAlloc(MAX_COUNT*sizeof(points[0][0]));
+            points[1] = (CvPoint2D32f*)cvAlloc(MAX_COUNT*sizeof(points[0][0]));
+            status = (char*)cvAlloc(MAX_COUNT);
+            flags = 0;
+#if CAM
             hsv = cvCreateImage( cvGetSize(wide), 8, 3 );
             hue = cvCreateImage( cvGetSize(wide), 8, 1 );
             mask = cvCreateImage( cvGetSize(wide), 8, 1 );
@@ -189,18 +225,58 @@ int main( int argc, char** argv ) {
 
             histimg = cvCreateImage( cvSize(320,200), 8, 3 );
             cvZero( histimg );
+#endif
         }
 
         cvCopy(wide, image, NULL);
-        cvCvtColor( image, hsv, CV_BGR2HSV );
+        //cvCvtColor( image, hsv, CV_BGR2HSV );
+        cvCvtColor( image, grey, CV_BGR2GRAY );
 
         /* detect eyes and display image */
-        if(face == NULL) {
+        if (face == NULL) {
             face = detectFaces(image);
-        } else {
-            face = camshift_f(face,image);
-            eyedetect(face, image);
+        } else if (doinglk == 0){
+            pt = cvPoint(face->x, face->y);
+            pt.x = pt.x + (face->width)*.3;
+            pt.y = pt.y + (face->height)*.3;
+            startlk = 1;
+            //face = camshift_f(face,image);
+            //startlk = eyedetect(face, image);
         }
+
+        if ( doinglk == 1) {
+            // do lk
+            eye = cvPointFrom32f(points[1][0]);
+            cvCalcOpticalFlowPyrLK( prev_grey, grey, prev_pyramid, pyramid,
+                points[0], points[1], count, cvSize(win_size,win_size), 3, status, 0,
+                cvTermCriteria(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS,20,0.03), flags );
+            flags |= CV_LKFLOW_PYR_A_READY;
+            for( i = k = 0; i < count; i++ )
+            {
+                if( !status[i] )
+                    continue;
+
+                points[1][k++] = points[1][i];
+                cvCircle( image, cvPointFrom32f(points[1][i]), 3, CV_RGB(0,255,0), -1, 8,0);
+            }
+            count = k;
+ 
+        }
+
+        if (startlk == 1) {
+            // init lk
+            points[1][0] = cvPointTo32f(pt);
+            cvFindCornerSubPix( grey, points[1] + 0 - 1, 1,
+                cvSize(win_size,win_size), cvSize(-1,-1),
+                cvTermCriteria(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS,20,0.03));
+            //cvCircle( image, cvPointFrom32f(points[1][0]), 3, CV_RGB(0,255,0), -1, 8,0);
+            doinglk = 1;
+            startlk = 0;
+        }
+
+        CV_SWAP( prev_grey, grey, swap_temp );
+        CV_SWAP( prev_pyramid, pyramid, swap_temp );
+        CV_SWAP( points[0], points[1], swap_points );
 
         //sendcamera(eye);
 
@@ -210,12 +286,17 @@ int main( int argc, char** argv ) {
         cvCopy(zoom, frame3, NULL);
         cvResetImageROI(frame3);
         cvShowImage("side-by-side", frame3);
+//        cvShowImage("grey", grey);
 
         char c = cvWaitKey(33);
         if( c == 27) break;
         switch (c) {
             case 32:
-                ringpos = 0;
+                ringpose = 0;
+                ringposf = 0;
+                startlk = 0;
+                doinglk = 0; 
+#if CAM
                 track_object = -1;
                 image = 0; 
                 hsv = 0; 
@@ -224,14 +305,15 @@ int main( int argc, char** argv ) {
                 backproject = 0; 
                 histimg = 0;
                 hist = 0;
-                
+#endif         
+                image = NULL;
                 face = NULL;
                 for (i = 0; i < NUMFRAMES; i++) {
                     cvClearMemStorage(storage1[i]);
                     prev_faces[i] = NULL;
                 }
                 for (i = 0; i < 10; i++)
-                    possface[i]= NULL;
+                    possface[i] = 0;
         }
 #if DEBUG
         switch(c) {
@@ -346,14 +428,14 @@ CvRect * detectFaces(IplImage *img)
     /* return if not found */
     if (faces->total == 0) return NULL;
 
-    for (k = ringpos; k > 0; k--) {
+    for (k = ringposf; k > 0; k--) {
         prev_faces[k] = cvCloneSeq(prev_faces[k-1], storage1[k]);
     }
     prev_faces[0] = cvCloneSeq(faces, storage1[0]);
 
     for (i = 0; i < faces->total; i++) {
         CvRect *cur = (CvRect*)cvGetSeqElem(faces, i);
-        for (k = 0; k < ringpos; k++) { 
+        for (k = 0; k < ringposf; k++) { 
             for (j = 0; j < prev_faces[k]->total; j++) {
                 CvRect *prev = (CvRect*)cvGetSeqElem(prev_faces[k], j);
                 if (cur->x > prev->x)
@@ -385,14 +467,15 @@ CvRect * detectFaces(IplImage *img)
         }
     }
 
-    if (ringpos < 4){
-        ringpos++;
+    if (ringposf < 4){
+        ringposf++;
     }
     /* reset buffer for the next object detection */
     cvClearMemStorage(storage);
     return NULL;
 }
 
+#if CAM
 CvRect* camshift_f(CvRect *face, IplImage * img)
 {
         int _vmin = vmin, _vmax = vmax;
@@ -458,13 +541,11 @@ CvScalar hsv2rgb( float hue )
 
     return cvScalar(rgb[2], rgb[1], rgb[0],0);
 }
+#endif
 
-CvPoint* eyedetect(CvRect *r, IplImage *img )
+int eyedetect(CvRect *r, IplImage *img )
 {
     int i, j, k;
-    static int ringpos = 0;
-    static CvSeq *prev_eyes[NUMFRAMES];
-    int posseye[10]={0,0,0,0,0,0,0,0,0,0}; // max 10 detected faces per frame
     int diffx, diffy;
     CvSeq *eyes;
     CvRect *r1;
@@ -478,14 +559,14 @@ CvPoint* eyedetect(CvRect *r, IplImage *img )
             img, cascade_e, storage,
             1.15, 3, 0, cvSize(25, 15));
 
-        for (k = ringpos; k > 0; k--) {
+        for (k = ringpose; k > 0; k--) {
             prev_eyes[k] = cvCloneSeq(prev_eyes[k-1], storage1[k]);
         }
         prev_eyes[0] = cvCloneSeq(eyes, storage1[0]);
 
         for (i = 0; i < eyes->total; i++) {
             CvRect *cur = (CvRect*)cvGetSeqElem(eyes, i);
-            for (k = 0; k < ringpos; k++) { 
+            for (k = 0; k < ringpose; k++) { 
                 for (j = 0; j < prev_eyes[k]->total; j++) {
                     CvRect *prev = (CvRect*)cvGetSeqElem(prev_eyes[k], j);
                     if (cur->x > prev->x)
@@ -515,17 +596,18 @@ CvPoint* eyedetect(CvRect *r, IplImage *img )
                 printf("x = %d, y = %d\n", eye.x, eye.y);
                 //cvClearMemStorage(storage);
                 //return &eye;
+                return 1;
             }
         }
 #endif
-        if (ringpos < 4){
-            ringpos++;
+        if (ringpose < 4){
+            ringpose++;
         }
         /* reset buffer for the next object detection */
         cvClearMemStorage(storage);
 
         cvResetImageROI(img);
-        return NULL; 
+        return 0; 
     }
 }
 
